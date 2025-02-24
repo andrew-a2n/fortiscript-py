@@ -59,6 +59,24 @@ def show_popup_window(text_data):
     T.config(state=tk.DISABLED)
                
 def convert_to_fortinet():
+    if (clicked.get() == options[0]):
+        print ("Processing Network Objects...")
+        convert_address_objects()
+    elif (clicked.get() == options[1]):
+        print ("Processing Service Objects")
+        messagebox.showinfo("Not Implemented Yet","Coming Soon...Service Objects")
+    elif (clicked.get() == options[2]):
+        print ("Processing Network Groups")
+        messagebox.showinfo("Not Implemented Yet","Coming Soon...Network Groups")
+    elif (clicked.get() == options[3]):
+        print ("Processing Service Groups")
+        messagebox.showinfo("Not Implemented Yet","Coming Soon...Service Groups")
+    elif (clicked.get() == options[4]):
+        print ("Processing Policy Rules")
+        messagebox.showinfo("Not Implemented Yet","Coming Soon...Policy Rules")
+   
+   
+def convert_address_objects():
     #Regex to match the IP column to a single IP or a range of IP's. If the value does not match either of these then its not a proper IPv4 address, write a message to the console and skip it.
     iprange_regex = re.compile(r"(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3} - (\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}")
     ip_regex = re.compile(r"(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}")
@@ -70,30 +88,37 @@ def convert_to_fortinet():
         
         #Iterate the array of table rows
         for parent in tree.get_children():
+        
             #Store the values from the row columns
             ipv4_addr = str(tree.item(parent)["values"][1])
             mask = tree.item(parent)["values"][2]
+            
+            #Fortinet max string length for comment field is 255 characters so we need to truncate if the source data is longer
             comment = truncate_string(str(tree.item(parent)["values"][3]), 255)
+            
             #Test for an ip range in the ipv4_address column
             if re.search(iprange_regex, ipv4_addr):
+            
                 #Split the IP range into an array of 2 variables, startip and endip, using the hyphen with space as delimeter
                 split_ip = ipv4_addr.split(" - ")
+                
                 #Generate fortinet syntax for IP range object
                 converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set type iprange\n        set start-ip " + split_ip[0] + "\n        set end-ip " + split_ip[1] + "\n        set comment \"" + comment + "\"\n    next\n")
                 
             #Test for a single IP string in the ipv4_address column
             elif re.search(ip_regex, ipv4_addr):
+            
                 #If the mask column has an explicit mask value then insert it into the output, otherwise we are hard coding a /32 mask into the output
                 if mask:
                     converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set subnet " + tree.item(parent)["values"][1] + " " + mask + "\n        set comment \"" + comment + "\"\n    next\n")
                 else:
                     converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set subnet " + tree.item(parent)["values"][1] + " " + "255.255.255.255" + "\n        set comment \"" + comment + "\"\n    next\n")
             
-            #Cant handle any non-ipv4 types here. If the regex doesn't match to an IP or range, then dump the value to the console for troubleshooting.
+            #Cant handle any other object types here. If the regex doesn't match to an IP or range, then dump the value to the console for troubleshooting.
             else:
                 print(f"Unable to convert IP: {ipv4_addr}")
         
-        #Spawns a child window with a textbox containing the output of this function, the resulting fortinet script
+        #Spawns a child window with a textbox containing the output of this function, the resulting completed fortinet script
         show_popup_window(header + converted + footer)
     except Exception as e:
        messagebox.showinfo("OH NO ITS AN ERROR!", e)
@@ -130,14 +155,29 @@ def show_help_dialog():
     messagebox.showinfo("Friendly Help Dialog","You must upload a csv spreadsheet with columns exactly like: Name,IPv4 address,Mask,Comments\n\nInclude the header row")
     
 
+# Dropdown menu options 
+options = [ 
+    "Network, host, IP Range", 
+    "Services", 
+    "Network Groups", 
+    "Service Groups", 
+    "Policy Rules"
+]
+
 root = tk.Tk()
 root.title("Fortinet Script Generator")
+
+clicked = tk.StringVar()
+clicked.set("Network, host, IP Range")
 
 frame = tk.Frame(root)
 frame.pack()
 
 bottomframe = tk.Frame(root)
 bottomframe.pack( side = tk.BOTTOM, expand=True, fill="both" )
+
+drop = tk.OptionMenu( frame , clicked , *options ) 
+drop.pack(padx=20, pady= 10, side=tk.LEFT) 
 
 open_button = tk.Button(frame, text="Open CSV File", command=open_csv_file)
 open_button.pack(padx=20, pady=10, side=tk.LEFT)
