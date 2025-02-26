@@ -64,7 +64,7 @@ def convert_to_fortinet():
         convert_address_objects()
     elif (clicked.get() == options[1]):
         print ("Processing Service Objects")
-        messagebox.showinfo("Not Implemented Yet","Coming Soon...Service Objects")
+        convert_service_objects()
     elif (clicked.get() == options[2]):
         print ("Processing Network Groups")
         messagebox.showinfo("Not Implemented Yet","Coming Soon...Network Groups")
@@ -80,6 +80,7 @@ def convert_address_objects():
     #Regex to match the IP column to a single IP or a range of IP's. If the value does not match either of these then its not a proper IPv4 address, write a message to the console and skip it.
     iprange_regex = re.compile(r"(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3} - (\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}")
     ip_regex = re.compile(r"(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}")
+    mask_regex = re.compile(r"^(255)\.(0|128|192|224|240|248|252|254|255)\.(0|128|192|224|240|248|252|254|255)\.(0|128|192|224|240|248|252|254|255)")
     try:
         #Header and footer for firewall address type objects
         header = "config firewall address\n"
@@ -110,13 +111,55 @@ def convert_address_objects():
             
                 #If the mask column has an explicit mask value then insert it into the output, otherwise we are hard coding a /32 mask into the output
                 if mask:
-                    converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set subnet " + tree.item(parent)["values"][1] + " " + mask + "\n        set comment \"" + comment + "\"\n    next\n")
+                    if re.search(mask_regex, mask):
+                        converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set subnet " + tree.item(parent)["values"][1] + " " + mask + "\n        set comment \"" + comment + "\"\n    next\n")
+                    else:
+                        print(f"Unable to convert mask: {ipv4_addr} {mask}")
                 else:
                     converted += ("    edit \"" + tree.item(parent)["values"][0] + "\"\n        set subnet " + tree.item(parent)["values"][1] + " " + "255.255.255.255" + "\n        set comment \"" + comment + "\"\n    next\n")
             
-            #Cant handle any other object types here. If the regex doesn't match to an IP or range, then dump the value to the console for troubleshooting.
+            #Cant handle any other object types here. If the regex doesn't match to an IP or range, then dump the values to the console for troubleshooting.
             else:
-                print(f"Unable to convert IP: {ipv4_addr}")
+                print(f"Unable to convert IP: {ipv4_addr} {mask}")
+        
+        #Spawns a child window with a textbox containing the output of this function, the resulting completed fortinet script
+        show_popup_window(header + converted + footer)
+    except Exception as e:
+       messagebox.showinfo("OH NO ITS AN ERROR!", e)
+
+
+def convert_service_objects():
+    #Regex to match the port column to a single port or a range of ports. If the value does not match either of these then its not a proper tcp/udp port, write a message to the console and skip it.
+    portrange_regex = re.compile(r"^(([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))-(([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))$")
+    port_regex = re.compile(r"^(([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))$")
+    type_regex = re.compile(r"^(tcp|udp)$")
+    try:
+        #Header and footer for firewall address type objects
+        header = "config firewall service custom\n"
+        footer = "end\n"
+        converted = ""
+        
+        #Iterate the array of table rows
+        for parent in tree.get_children():
+        
+            #Store the values from the row columns
+            port_name = str(tree.item(parent)["values"][0])
+            port_type = str(tree.item(parent)["values"][1]).lower()
+            port = str(tree.item(parent)["values"][2])
+            
+            
+            #Fortinet max string length for comment field is 255 characters so we need to truncate if the source data is longer
+            comment = truncate_string(str(tree.item(parent)["values"][3]), 255)
+            
+            #Test for a valid port or range and type
+            if (re.search(type_regex, port_type)):
+            
+                #Generate fortinet syntax for IP range object
+                converted += ("    edit \"" + port_name + "\"\n        set " + port_type + "-portrange " + port + "\n        set comment \"" + comment + "\"\n    next\n")
+                
+            #Bad port definition, dump it to the console for troubleshooting.
+            else:
+                print(f"Unable to convert Port: {port_name} {port_type} {port}")
         
         #Spawns a child window with a textbox containing the output of this function, the resulting completed fortinet script
         show_popup_window(header + converted + footer)
