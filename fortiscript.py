@@ -152,7 +152,7 @@ def convert_service_objects():
             comment = truncate_string(str(tree.item(parent)["values"][3]), 255)
             
             #Test for a valid port or range and type
-            if (re.search(type_regex, port_type)):
+            if ((re.search(portrange_regex, port) or re.search(port_regex, port)) and re.search(type_regex, port_type)):
             
                 #Generate fortinet syntax for IP range object
                 converted += ("    edit \"" + port_name + "\"\n        set " + port_type + "-portrange " + port + "\n        set comment \"" + comment + "\"\n    next\n")
