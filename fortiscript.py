@@ -59,22 +59,26 @@ def show_popup_window(text_data):
     T.config(state=tk.DISABLED)
                
 def convert_to_fortinet():
-    if (clicked.get() == options[0]):
+    
+    global datatype
+    
+    if (datatype == "ipv4_address"):
         print ("Processing Network Objects...")
         convert_address_objects()
-    elif (clicked.get() == options[1]):
+    elif (datatype == "service"):
         print ("Processing Service Objects")
         convert_service_objects()
-    elif (clicked.get() == options[2]):
+    elif (datatype == "ipv4_group"):
         print ("Processing Network Groups")
         messagebox.showinfo("Not Implemented Yet","Coming Soon...Network Groups")
-    elif (clicked.get() == options[3]):
+    elif (datatype == "service_group"):
         print ("Processing Service Groups")
         messagebox.showinfo("Not Implemented Yet","Coming Soon...Service Groups")
-    elif (clicked.get() == options[4]):
+    elif (datatype == "policy"):
         print ("Processing Policy Rules")
         messagebox.showinfo("Not Implemented Yet","Coming Soon...Policy Rules")
-   
+    else:
+        messagebox.showinfo(f"Bad Datatype","Type: {datatype}")
    
 def convert_address_objects():
     #Regex to match the IP column to a single IP or a range of IP's. If the value does not match either of these then its not a proper IPv4 address, write a message to the console and skip it.
@@ -134,7 +138,7 @@ def convert_service_objects():
     port_regex = re.compile(r"^(([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))$")
     type_regex = re.compile(r"^(tcp|udp)$")
     try:
-        #Header and footer for firewall address type objects
+        #Header and footer for firewall service type objects
         header = "config firewall service custom\n"
         footer = "end\n"
         converted = ""
@@ -175,19 +179,32 @@ def display_csv_data(file_path):
             tree.delete(*tree.get_children())  # Clear the current data
 
             tree["columns"] = header
-            for col in header:
-                tree.heading(col, text=col, command=lambda _col=col: \
-                     treeview_sort_column(tree, col, False))
-                tree.column(col, width=100)
-
-            for row in csv_reader:
-                tree.insert("", "end", values=row)
-
-            status_label.config(text=f"CSV file loaded: {file_path}")
-            convert_button.config(state=tk.NORMAL)
+            global datatype
+            
+            if (header[1] == "ipv4_address"):
+                datatype = "ipv4_address"
+                for row in csv_reader:
+                    #planning to put the regex checks here to highlight the bad data in the preview panel before converting
+                    tree.insert("", "end", values=row)
+            elif (header[2] == "port"):
+                datatype = "service"
+                for row in csv_reader:
+                    tree.insert("", "end", values=row)
+            elif (header[1] == "ipv4_members"):
+                datatype = ""
+            elif (header[1] == "port_members"):
+                datatype = ""
+            else:
+                datatype = ""
+                
+            if (datatype): 
+                status_label.config(text=f"CSV data loaded as [{datatype}]: {file_path}")
+                convert_button.config(state=tk.NORMAL)
+            else:
+                status_label.config(text="Cannot determine type of CSV data. Please check your schema.")
 
     except Exception as e:
-        status_label.config(text=f"Error: {str(e)}")
+        status_label.config(text=f"Error Loading CSV: {str(e)}")
 
 def clear_treeview():
     tree.delete(*tree.get_children())  # Clear the current data
@@ -195,32 +212,19 @@ def clear_treeview():
     status_label.config(text="No data loaded")
     
 def show_help_dialog():
-    messagebox.showinfo("Friendly Help Dialog","You must upload a csv spreadsheet with columns exactly like: Name,IPv4 address,Mask,Comments\n\nInclude the header row")
+    show_popup_window("You must upload a CSV file with header row exactly like:\n\tIPv4 Addresses: name,ipv4_address,mask,comments\n\tServices: name,type,port,comments")
     
-
-# Dropdown menu options 
-options = [ 
-    "Network, host, IP Range", 
-    "Services", 
-    "Network Groups", 
-    "Service Groups", 
-    "Policy Rules"
-]
 
 root = tk.Tk()
 root.title("Fortinet Script Generator")
 
-clicked = tk.StringVar()
-clicked.set("Network, host, IP Range")
+datatype = ""
 
 frame = tk.Frame(root)
 frame.pack()
 
 bottomframe = tk.Frame(root)
 bottomframe.pack( side = tk.BOTTOM, expand=True, fill="both" )
-
-drop = tk.OptionMenu( frame , clicked , *options ) 
-drop.pack(padx=20, pady= 10, side=tk.LEFT) 
 
 open_button = tk.Button(frame, text="Open CSV File", command=open_csv_file)
 open_button.pack(padx=20, pady=10, side=tk.LEFT)
@@ -237,7 +241,7 @@ help_button.pack(padx=20, pady=20, side=tk.LEFT)
 tree = ttk.Treeview(bottomframe, show="headings")
 tree.pack(padx=20, pady=20, fill="both", expand=True)
 
-status_label = tk.Label(bottomframe, text="", padx=20, pady=10)
+status_label = tk.Label(bottomframe, text="No data loaded", padx=20, pady=10)
 status_label.pack()
 
 root.mainloop()
